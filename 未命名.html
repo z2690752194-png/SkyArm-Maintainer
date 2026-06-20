@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkyArm | 无人机六自由度机械臂智能作业机器人</title>
+  <!-- 外部CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+  <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- Tailwind 自定义主题 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            tech: {
+              dark: '#050814',
+              mid: '#0d1326',
+              glass: 'rgba(18, 28, 58, 0.35)',
+              border: 'rgba(66, 153, 255, 0.2)',
+              primary: '#0099ff',
+              glow: '#00ccff',
+              accent: '#2277ff'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          animation: {
+            'float': 'float 6s ease-in-out infinite',
+            'pulse-glow': 'pulseGlow 3s ease-in-out infinite',
+            'numRoll': 'numRoll 2s ease-out forwards'
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-12px)' },
+            },
+            pulseGlow: {
+              '0%,100%': { boxShadow: '0 0 12px #0099ff40' },
+              '50%': { boxShadow: '0 0 30px #00ccff70' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .glass {
+        background: theme('colors.tech.glass');
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid theme('colors.tech.border');
+      }
+      .text-gradient {
+        background: linear-gradient(90deg, #0099ff, #00ccff);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .hex-box {
+        clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+      }
+      .scrollbar-hide::-webkit-scrollbar { display: none; }
+      .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+      .btn-glow {
+        box-shadow: 0 0 15px #0099ff50;
+        transition: all 0.3s ease;
+      }
+      .btn-glow:hover {
+        box-shadow: 0 0 28px #00ccff90;
+        transform: translateY(-3px);
+      }
+      .section-height { min-height: 100vh; }
+    }
+  </style>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { background-color: #050814; color: #e6f2ff; overflow-x: hidden; }
+    #bg-particle-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: -1;
+      pointer-events: none;
+    }
+    .hex-module { transition: all 0.4s cubic-bezier(0.2,0,0.2,1); }
+    .hex-module:hover { transform: scale(1.08); z-index: 10; }
+    .chat-msg { animation: fadeIn 0.4s ease forwards; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(10px); } to { opacity:1; transform: translateY(0); } }
+    .num-animate { visibility: hidden; }
+    .three-view { width: 100%; height: 420px; border-radius: 12px; overflow: hidden; }
+  </style>
+</head>
+<body class="scrollbar-hide">
+  <!-- 全局粒子背景 -->
+  <canvas id="bg-particle-canvas"></canvas>
+
+  <!-- 导航栏 -->
+  <nav class="fixed top-0 w-full z-50 glass px-6 lg:px-16 py-4 flex justify-between items-center">
+    <div class="text-xl font-bold text-gradient">SkyArm</div>
+    <div class="hidden lg:flex gap-8 text-sm">
+      <a href="#hero" class="hover:text-tech-glow transition-colors">首页</a>
+      <a href="#intro" class="hover:text-tech-glow transition-colors">产品简介</a>
+      <a href="#market" class="hover:text-tech-glow transition-colors">市场背景</a>
+      <a href="#scene" class="hover:text-tech-glow transition-colors">应用场景</a>
+      <a href="#tech" class="hover:text-tech-glow transition-colors">核心技术</a>
+      <a href="#innovate" class="hover:text-tech-glow transition-colors">产品创新</a>
+      <a href="#advantage" class="hover:text-tech-glow transition-colors">产品优势</a>
+      <a href="#future" class="hover:text-tech-glow transition-colors">未来规划</a>
+    </div>
+    <a href="#intro" class="px-5 py-2 rounded-lg bg-tech-primary btn-glow text-white">了解产品</a>
+  </nav>
+
+  <!-- Hero全屏首屏 -->
+  <section id="hero" class="section-height flex items-center relative px-6 lg:px-16 pt-24">
+    <div class="max-w-4xl" data-aos="fade-up">
+      <h1 class="text-[clamp(2.5rem,8vw,4.5rem)] font-bold leading-tight">
+        <span class="text-gradient">SkyArm</span>
+      </h1>
+      <h2 class="text-[clamp(1.2rem,3vw,1.8rem)] mt-4 text-gray-300">无人机+六自由度机械臂智能作业机器人</h2>
+      <div class="flex flex-wrap gap-4 my-8 text-lg">
+        <span class="glass px-4 py-2 rounded-lg">高空无人作业</span>
+        <span class="glass px-4 py-2 rounded-lg">六自由度精密操作</span>
+        <span class="glass px-4 py-2 rounded-lg">数字孪生运维</span>
+        <span class="glass px-4 py-2 rounded-lg">AI智能诊断</span>
+        <span class="glass px-4 py-2 rounded-lg">多行业模块化适配</span>
+      </div>
+      <p class="text-gray-400 text-lg max-w-2xl">替代人工完成危险环境下的检测、维修、清洁及应急处置任务，为电力、通信、新能源等行业提供智能化、无人化全套解决方案。</p>
+      <div class="flex gap-5 mt-10">
+        <a href="#intro" class="px-8 py-3 rounded-lg bg-tech-primary btn-glow text-white text-lg">产品简介</a>
+        <a href="#scene" class="px-8 py-3 rounded-lg glass border border-tech-border text-lg hover:border-tech-glow transition-all">应用场景</a>
+      </div>
+    </div>
+    <div class="absolute right-0 top-1/2 -translate-y-1/2 w-[500px] h-[500px] hidden xl:block">
+      <div id="hero-3d" class="three-view"></div>
+    </div>
+  </section>
+
+  <!-- 产品简介 -->
+  <section id="intro" class="py-20 px-6 lg:px-16">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold text-center mb-12 text-gradient" data-aos="fade-up">产品简介</h2>
+      <div class="glass p-10 rounded-xl" data-aos="fade-up">
+        <p class="text-lg text-gray-200 leading-relaxed mb-6">
+          SkyArm 是一款面向高空复杂环境作业需求设计的无人机-六自由度机械臂一体化智能机器人系统。产品融合多旋翼无人机技术、六自由度机械臂技术、多传感器感知技术以及人工智能技术，实现飞行平台与精密操作能力的深度结合，可替代人工完成危险环境下的检测、维修、清洁及应急处置任务，为电力、通信、新能源等行业提供智能化、无人化解决方案。
+        </p>
+        <p class="text-lg text-gray-200 leading-relaxed">
+          机器人采用模块化设计架构，由飞行系统、六自由度机械臂系统、视觉感知系统、通信系统、能源系统以及末端执行机构组成，具备自主感知、精准定位、稳定悬停和精细操作能力，可在复杂环境下完成高精度作业任务。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 市场背景 -->
+  <section id="market" class="py-20 px-6 lg:px-16 section-height flex flex-col justify-center">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold text-center mb-12 text-gradient" data-aos="fade-up">市场背景</h2>
+      <div class="grid lg:grid-cols-2 gap-10">
+        <div class="glass p-8 rounded-xl" data-aos="fade-right">
+          <h3 class="text-2xl font-semibold mb-6 text-tech-glow">行业现存痛点</h3>
+          <ul class="space-y-4 text-gray-300 text-lg">
+            <li class="flex gap-3"><i class="fa fa-times text-red-400 mt-1"></i>高空人工作业危险系数极高，安全事故频发</li>
+            <li class="flex gap-3"><i class="fa fa-times text-red-400 mt-1"></i>人工运维劳动强度大、作业效率低下</li>
+            <li class="flex gap-3"><i class="fa fa-times text-red-400 mt-1"></i>专业运维人员培训周期长、人力成本高昂</li>
+            <li class="flex gap-3"><i class="fa fa-times text-red-400 mt-1"></i>传统作业模式难以覆盖复杂高危作业场景</li>
+          </ul>
+        </div>
+        <div class="glass p-8 rounded-xl" data-aos="fade-left">
+          <h3 class="text-2xl font-semibold mb-6 text-tech-glow">产业发展机遇</h3>
+          <p class="text-gray-300 text-lg leading-relaxed">
+            随着低空经济、智能制造和机器人产业的快速发展，无人机与机械臂融合技术逐渐成为特种机器人领域的重要发展方向。国家大力推动低空经济、数字经济和智能机器人产业发展，智能无人系统已成为新质生产力的重要组成部分。SkyArm 能够有效解决传统高空作业的安全风险与效率瓶颈，市场需求广阔。
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 产品应用场景 -->
+  <section id="scene" class="py-20 px-6 lg:px-16">
+    <div class="max-w-7xl mx-auto">
+      <h2 class="text-4xl font-bold text-center mb-16 text-gradient" data-aos="fade-up">产品应用场景</h2>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <!-- 场景1 -->
+        <div class="glass p-8 rounded-xl hover:pulse-glow transition-all" data-aos="fade-up">
+          <div class="w-full h-[180px] rounded bg-tech-mid mb-6 flex items-center justify-center">
+            <i class="fa fa-bolt text-5xl text-tech-glow"></i>
+          </div>
+          <h3 class="text-2xl font-semibold mb-3">高压输电线路异物清理</h3>
+          <p class="text-gray-400">视觉识别快速定位导线缠绕的风筝、塑料、树枝异物，机械臂夹爪精准清除，无需人工登塔，提升电网运维安全与效率。</p>
+        </div>
+        <!-- 场景2 -->
+        <div class="glass p-8 rounded-xl hover:pulse-glow transition-all" data-aos="fade-up" data-aos-delay="100">
+          <div class="w-full h-[180px] rounded bg-tech-mid mb-6 flex items-center justify-center">
+            <i class="fa fa-signal text-5xl text-tech-glow"></i>
+          </div>
+          <h3 class="text-2xl font-semibold mb-3">通信基站钢结构维护</h3>
+          <p class="text-gray-400">搭载专用焊接执行机构，远程检测修复5G基站钢结构裂纹、焊接缺陷，规避高空攀爬作业风险。</p>
+        </div>
+        <!-- 场景3 -->
+        <div class="glass p-8 rounded-xl hover:pulse-glow transition-all" data-aos="fade-up" data-aos-delay="200">
+          <div class="w-full h-[180px] rounded bg-tech-mid mb-6 flex items-center justify-center">
+            <i class="fa fa-sun-o text-5xl text-tech-glow"></i>
+          </div>
+          <h3 class="text-2xl font-semibold mb-3">光伏电站智能清洁</h3>
+          <p class="text-gray-400">搭载清洁模块自动清扫光伏板积灰，提升光伏发电效率，大幅降低大型光伏电站人工清洁成本。</p>
+        </div>
+        <!-- 场景4 -->
+        <div class="glass p-8 rounded-xl hover:pulse-glow transition-all" data-aos="fade-up" data-aos-delay="300">
+          <div class="w-full h-[180px] rounded bg-tech-mid mb-6 flex items-center justify-center">
+            <i class="fa fa-medkit text-5xl text-tech-glow"></i>
+          </div>
+          <h3 class="text-2xl font-semibold mb-3">应急救援与危险环境作业</h3>
+          <p class="text-gray-400">火灾、灾害、高危区域替代人员完成巡检、物资投送、险情处置，强化应急响应能力。</p>
+        </div>
+        <!-- 场景5 -->
+        <div class="glass p-8 rounded-xl hover:pulse-glow transition-all md:col-span-2 lg:col-span-1" data-aos="fade-up" data-aos-delay="400">
+          <div class="w-full h-[180px] rounded bg-tech-mid mb-6 flex items-center justify-center">
+            <i class="fa fa-industry text-5xl text-tech-glow"></i>
+          </div>
+          <h3 class="text-2xl font-semibold mb-3">特种巡检与工业维护</h3>
+          <p class="text-gray-400">适配风电设备、石化管道、桥梁钢结构、工业设备远程巡检维修，覆盖全品类高空特种运维需求。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 核心技术 -->
+  <section id="tech" class="py-20 px-6 lg:px-16 section-height flex flex-col justify-center">
+    <div class="max-w-6xl mx-auto w-full">
+      <h2 class="text-4xl font-bold text-center mb-16 text-gradient" data-aos="fade-up">核心技术</h2>
+      <div class="glass p-10 rounded-xl" data-aos="fade-up">
+        <div class="grid md:grid-cols-2 gap-6">
+          <div class="flex items-center gap-4 text-lg text-gray-200">
+            <i class="fa fa-check-circle text-tech-glow text-xl"></i>多旋翼飞行控制技术
+          </div>
+          <div class="flex items-center gap-4 text-lg text-gray-200">
+            <i class="fa fa-check-circle text-tech-glow text-xl"></i>六自由度机械臂精密控制技术
+          </div>
+          <div class="flex items-center gap-4 text-lg text-gray-200">
+            <i class="fa fa-check-circle text-tech-glow text-xl"></i>多传感器融合感知技术
+          </div>
+          <div class="flex items-center gap-4 text-lg text-gray-200">
+            <i class="fa fa-check-circle text-tech-glow text-xl"></i>视觉识别与目标定位技术
+          </div>
+          <div class="flex items-center gap-4 text-lg text-gray-200">
+            <i class="fa fa-check-circle text-tech-glow text-xl"></i>数字孪生三维可视化技术
+          </div>
+          <div class="flex items-center gap-4 text-lg text-gray-200">
+            <i class="fa fa-check-circle text-tech-glow text-xl"></i>AI智能运维与故障诊断技术
+          </div>
+          <div class="flex items-center gap-4 text-lg text-gray-200">
+            <i class="fa fa-check-circle text-tech-glow text-xl"></i>故障树自动推理诊断技术
+          </div>
+          <div class="flex items-center gap-4 text-lg text-gray-200">
+            <i class="fa fa-check-circle text-tech-glow text-xl"></i>虚拟拆装仿真演示技术
+          </div>
+          <div class="flex items-center gap-4 text-lg text-gray-200 md:col-span-2">
+            <i class="fa fa-check-circle text-tech-glow text-xl"></i>AI Agent智能维修交互助手技术
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 产品创新性 -->
+  <section id="innovate" class="py-20 px-6 lg:px-16">
+    <div class="max-w-7xl mx-auto">
+      <h2 class="text-4xl font-bold text-center mb-16 text-gradient" data-aos="fade-up">产品五大创新性</h2>
+      <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div class="glass p-6 rounded-xl" data-aos="fade-up">
+          <h4 class="text-xl font-semibold mb-3 text-tech-glow">数字孪生与机器人深度融合</h4>
+          <p class="text-gray-400">构建设备三维数字模型，实现结构可视化、动态仿真、全生命周期数字化管控。</p>
+        </div>
+        <div class="glass p-6 rounded-xl" data-aos="fade-up" data-aos-delay="80">
+          <h4 class="text-xl font-semibold mb-3 text-tech-glow">AI智能运维完整体系</h4>
+          <p class="text-gray-400">知识库+故障树+虚拟维修一体化，自动故障分析、可视化维修指导、智能问答。</p>
+        </div>
+        <div class="glass p-6 rounded-xl" data-aos="fade-up" data-aos-delay="160">
+          <h4 class="text-xl font-semibold mb-3 text-tech-glow">全生命周期闭环管理</h4>
+          <p class="text-gray-400">诊断-定位-维修-工单-知识更新闭环，维修经验自动数字化沉淀迭代。</p>
+        </div>
+        <div class="glass p-6 rounded-xl" data-aos="fade-up" data-aos-delay="240">
+          <h4 class="text-xl font-semibold mb-3 text-tech-glow">通用模块化设计</h4>
+          <p class="text-gray-400">末端执行器快速拆装切换，一套机器人适配清理、焊接、清洁多类作业任务。</p>
+        </div>
+        <div class="glass p-6 rounded-xl" data-aos="fade-up" data-aos-delay="320">
+          <h4 class="text-xl font-semibold mb-3 text-tech-glow">无人化高危作业模式</h4>
+          <p class="text-gray-400">机器人完全替代人工进入危险高空场景，消除人员安全风险，作业标准化。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 产品优势+数据提升 -->
+  <section id="advantage" class="py-20 px-6 lg:px-16 section-height flex flex-col justify-center">
+    <div class="max-w-7xl mx-auto w-full">
+      <h2 class="text-4xl font-bold text-center mb-16 text-gradient" data-aos="fade-up">产品核心优势 & 量化提升</h2>
+      <div class="grid lg:grid-cols-2 gap-12">
+        <!-- 优势列表 -->
+        <div class="glass p-8 rounded-xl" data-aos="fade-right">
+          <h3 class="text-2xl font-semibold mb-6 text-tech-glow">八大核心优势</h3>
+          <ul class="space-y-3 text-lg text-gray-300">
+            <li><i class="fa fa-star text-yellow-400 mr-2"></i>高精度六自由度精细操作能力</li>
+            <li><i class="fa fa-star text-yellow-400 mr-2"></i>多行业场景通用任务执行能力</li>
+            <li><i class="fa fa-star text-yellow-400 mr-2"></i>模块化快速扩展、执行器灵活切换</li>
+            <li><i class="fa fa-star text-yellow-400 mr-2"></i>AI智能辅助故障诊断与决策</li>
+            <li><i class="fa fa-star text-yellow-400 mr-2"></i>数字孪生全流程可视化运维</li>
+            <li><i class="fa fa-star text-yellow-400 mr-2"></i>整机高稳定、高安全冗余设计</li>
+            <li><i class="fa fa-star text-yellow-400 mr-2"></i>大幅削减高空人工运维成本</li>
+            <li><i class="fa fa-star text-yellow-400 mr-2"></i>设备运维、作业综合效率显著提升</li>
+          </ul>
+        </div>
+        <!-- 量化数据 -->
+        <div class="grid grid-cols-2 gap-6" data-aos="fade-left">
+          <div class="glass p-8 rounded-xl text-center">
+            <div class="text-5xl font-bold text-gradient num-animate" data-target="75">0</div>
+            <p class="mt-4 text-xl">维修时长缩短75%</p>
+          </div>
+          <div class="glass p-8 rounded-xl text-center">
+            <div class="text-5xl font-bold text-gradient num-animate" data-target="70">0</div>
+            <p class="mt-4 text-xl">故障定位效率↑70%</p>
+          </div>
+          <div class="glass p-8 rounded-xl text-center">
+            <div class="text-5xl font-bold text-gradient num-animate" data-target="50">0</div>
+            <p class="mt-4 text-xl">整体运维成本↓50%</p>
+          </div>
+          <div class="glass p-8 rounded-xl text-center">
+            <div class="text-5xl font-bold text-gradient num-animate" data-target="7">0</div>
+            <p class="mt-4 text-xl">培训周期30天→7天</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 未来发展方向 -->
+  <section id="future" class="py-20 px-6 lg:px-16">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-4xl font-bold text-center mb-12 text-gradient" data-aos="fade-up">未来发展方向</h2>
+      <div class="glass p-10 rounded-xl" data-aos="fade-up">
+        <p class="text-lg text-gray-200 leading-relaxed mb-6">
+          未来，SkyArm 将进一步融合大模型、多智能体协同、增强现实（AR）、数字孪生和预测性维护技术，逐步构建具备自主学习、自主诊断和远程协同能力的新一代智能机器人平台。
+        </p>
+        <p class="text-lg text-gray-200 leading-relaxed mb-6">
+          产品不仅能够服务于电力、通信和新能源领域，还可扩展应用于工业机器人、巡检机器人、医疗机器人、教育机器人以及特种机器人等行业，为我国低空经济和智能机器人产业高质量发展提供智能化解决方案。
+        </p>
+        <p class="text-xl text-center text-gradient font-bold mt-10">
+          SkyArm，不仅是一台机器人，更是面向未来智能运维时代的全新解决方案。
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 页脚 -->
+  <footer class="glass py-12 px-6 lg:px-16">
+    <div class="max-w-6xl mx-auto text-center">
+      <h2 class="text-3xl font-bold text-gradient mb-4">SkyArm</h2>
+      <p class="text-xl mb-2">无人机+六自由度机械臂智能作业机器人</p>
+      <p class="text-gray-400 mb-6">低空经济特种无人作业 · 数字孪生 × AI智能运维解决方案</p>
+      <div class="flex justify-center gap-6 text-tech-glow text-xl">
+        <i class="fa fa-github cursor-pointer"></i>
+        <i class="fa fa-envelope cursor-pointer"></i>
+        <i class="fa fa-link cursor-pointer"></i>
+      </div>
+      <p class="mt-8 text-sm text-gray-500">© 2026 SkyArm 研发团队 国赛参赛项目</p>
+    </div>
+  </footer>
+
+  <!-- JS逻辑 -->
+  <script>
+    AOS.init({ duration: 1000, once: true });
+    // 蓝色粒子背景
+    const canvas = document.getElementById('bg-particle-canvas');
+    const ctx = canvas.getContext('2d');
+    let width, height, particles = [];
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+    class Particle {
+      constructor(){
+        this.x = Math.random()*width;
+        this.y = Math.random()*height;
+        this.r = Math.random()*2+0.5;
+        this.vx = (Math.random()-0.5)*0.6;
+        this.vy = (Math.random()-0.5)*0.6;
+        this.alpha = Math.random()*0.6+0.2;
+      }
+      update(){
+        this.x += this.vx;
+        this.y += this.vy;
+        if(this.x<0||this.x>width)this.vx*=-1;
+        if(this.y<0||this.y>height)this.vy*=-1;
+      }
+      draw(){
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(0,170,255,${this.alpha})`;
+        ctx.fill();
+      }
+    }
+    for(let i=0;i<220;i++) particles.push(new Particle());
+    function animate(){
+      ctx.clearRect(0,0,width,height);
+      particles.forEach(p=>{p.update();p.draw();});
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // 数字滚动动画
+    const numItems = document.querySelectorAll('.num-animate');
+    function startNumAnim(el){
+      const target = Number(el.dataset.target);
+      let cur = 0;
+      const timer = setInterval(()=>{
+        cur+=Math.ceil(target/40);
+        if(cur>=target){cur=target;clearInterval(timer);}
+        el.innerText = cur;
+      },40);
+    }
+    const obs = new IntersectionObserver((entries)=>{
+      entries.forEach(item=>{
+        if(item.isIntersecting){
+          item.target.style.visibility = 'visible';
+          startNumAnim(item.target);
+          obs.unobserve(item.target);
+        }
+      });
+    },{threshold:0.4});
+    numItems.forEach(el=>obs.observe(el));
+
+    // Three.js 简易3D无人机机械臂模型
+    function init3D(containerId){
+      const container = document.getElementById(containerId);
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(60,container.clientWidth/container.clientHeight,0.1,1000);
+      const renderer = new THREE.WebGLRenderer({alpha:true,antialias:true});
+      renderer.setSize(container.clientWidth,container.clientHeight);
+      renderer.setClearColor(0x050814,0);
+      container.appendChild(renderer.domElement);
+      const controls = new THREE.OrbitControls(camera,renderer.domElement);
+      const light = new THREE.DirectionalLight(0x00ccff,1);
+      light.position.set(5,8,10);
+      scene.add(light);
+      const ambient = new THREE.AmbientLight(0x2277ff,0.4);
+      scene.add(ambient);
+      // 无人机机身
+      const matBlue = new THREE.MeshStandardMaterial({color:0x0099ff,metalness:0.7,roughness:0.2});
+      const droneBody = new THREE.Mesh(new THREE.BoxGeometry(2.2,0.6,1.2),matBlue);
+      scene.add(droneBody);
+      // 六自由度机械臂分段
+      const arm1 = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,1.8),matBlue);
+      arm1.position.set(0,-0.8,0);
+      droneBody.add(arm1);
+      const arm2 = new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,1.6),matBlue);
+      arm2.position.set(0,-1,0);
+      arm1.add(arm2);
+      const arm3 = new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.1,1.4),matBlue);
+      arm3.position.set(0,-0.9,0);
+      arm2.add(arm3);
+      camera.position.z = 6;
+      function renderLoop(){
+        requestAnimationFrame(renderLoop);
+        droneBody.rotation.y +=0.003;
+        arm1.rotation.z +=0.005;
+        controls.update();
+        renderer.render(scene,camera);
+      }
+      renderLoop();
+      window.addEventListener('resize',()=>{
+        camera.aspect = container.clientWidth/container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth,container.clientHeight);
+      })
+    }
+    window.addEventListener('load',()=>{
+      init3D('hero-3d');
+    })
+  </script>
+</body>
+</html>
